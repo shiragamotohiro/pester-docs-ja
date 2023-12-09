@@ -1,34 +1,36 @@
 ---
 id: testdrive
-title: Isolating File Operations using the TestDrive
+title: TestDrive を使用したファイル操作の分離
 sidebar_label: TestDrive
-description: TestDrive is a PowerShell PSDrive where you can create temporary files used in your tests that are automatically cleaned up after your tests are finished
+description: TestDrive は、テストで使用される一時ファイルを作成できる PowerShell PSDrive で、テスト終了後に自動的に削除されます。
 ---
 
-TestDrive is a PowerShell PSDrive for file activity limited to the scope of a block ([Describe](../commands/Describe) or [Context](../commands/Context)).
+TestDrive は、 ブロック([Describe](../commands/Describe) or [Context](../commands/Context))内にスコープが限定されたファイル操作用のPowerShell PSDrive です。
 
-A test may need to work with file operations and validate certain types of file activities. It is usually desirable not to perform file activity tests that will produce side effects outside of an individual test. Pester creates a PSDrive inside the user's temporary drive that is accessible via a named PSDrive `TestDrive:`. Pester will remove this drive after the tests completes. You may use this drive to isolate the file operations of your test to a temporary store.
+テストでは、ファイルを操作し、ファイルの検証を行う場合があります。一般論として、テストの実行にあたって、テスト内でのファイルの作成、削除、書き込みのような操作が、他に影響をあたえないほうがよいと考えられます。Pester は、ユーザーの一時ドライブ内に `TestDrive:` と名前がつけられた PSDrive を作成します。Pester は、テストが完了したらこのドライブを削除します。このドライブを使用することで、テスト内でのファイルの作成、削除、書き込みのような操作を分離することができます。
 
 ## Scoping
 
-Basic scoping rules are implemented for the TestDrive:
+TestDrive:の基本的なスコープ
 
-1. A clean TestDrive is created per container (test-file or scriptblock) on entry to the first top-level block (Describe or Context) in that container.
-2. All files and folders created by your setups and tests are available during the lifetime of that block, including inner blocks.
-3. When exiting a block, files and folders created during it's lifetime will be removed. Modifications to items created in parent blocks are not reversed, see caution below.
-4. When the whole container is finished, the TestDrive and all files and folders inside it is deleted.
+1. 空の TestDrive は、コンテナ (テストファイル または スクリプトブロック) 内の最初の最上位のブロック (Describe または Context) に入るとき、コンテナごとに作成されます。
+2. TestDrive 内のすべてのファイルとフォルダーは、ブロック内の子ブロックを含めて、ブロックが存続する間は使用できます。
+3. ブロックを終了すると、ブロックが存続した間に作成されたファイルとフォルダーは削除されます。 親ブロックで作成された項目への変更は元に戻りません。下記の注意を参照してください。
+4. コンテナが終了すると、TestDrive とTestDrive内のすべてのファイルとフォルダーが削除されます。
 
-:::warning Modifications to existing items are not reversed
-Be aware that the TestDrive content is tracked by paths. When entering a block, all paths which already exists will be excluded during cleanup when exiting the block.
-In practice this means that if you create a file in the Describe block and then change its content inside the Context block, the modifications or deletions are preserved even after you left the Context block.
+※3.についてはテストが必要。
+
+:::warning すでに存在するものへの変更は元に戻りません
+TestDrive 内の項目は、パスで識別されます。ブロックに入るとき、すでに存在するすべてのパスは、ブロックから出るときの TestDriveの削除から除外されます。
+つまり、Describe ブロック内でファイルを作成し、Context ブロック内でファイルの内容を変更した場合、変更はブロックから出たあとも保持されます。
 :::
 
 :::note Using TestDrive in parallel runs
-Internally the TestDrive creates a randomly named folder placed in $env:Temp and links it to the TestDrive PSDrive.
-Making the folder names random enables you to run multiple instances of Pester in parallel, as long as they are running as separate processes. That means running in different PowerShell.exe sessions or running using PowerShell jobs.
+TestDriveの内部的な動作として、環境変数 Temp のパス配下にランダムな名前のフォルダを作成し、PSDriveとして割りあてます。
+ランダムな名前のフォルダとすることで、異なるプロセスの複数の Pester テストを同時実行することができます。つまり、異なる PowerShell.exe プロセス、または異なる PowerShell ジョブは同時実行することが可能です。
 :::
 
-## Example
+## コード例
 
 ```powershell
 BeforeAll {
@@ -51,12 +53,11 @@ Describe "Add-Footer" {
 }
 ```
 
-## Compare with Literal Path
+## リテラルのパスとの比較
 
-Use the $TestDrive variable to compare regular paths with TestDrive paths. The following
-two paths will refer to the same file on disk, but the first one will contain the full file
-system path to the root of the TestDrive PSDrive, rather than a PowerShell path starting with
-'TestDrive:\'.
+$TestDrive 変数を使用して、通常のパスと TestDrive のパスを比較します。以下の2つのパスは、同一のファイルを指し示しています。
+1つ目の $pathOne 変数は、 PSDrive である TestDriveのルートを割り当てた、システムパスを示しています。
+2つめの $pathTwo 変数は、「TestDrive:\」ではじまる PowerShell のパスです。
 
 ```powershell
 #eg. C:\Users\nohwnd\AppData\Local\Temp\264f1c74-464f-4387-b908-79e5eecba982\somefile.txt
@@ -65,7 +66,7 @@ $pathOne = Join-Path $TestDrive 'somefile.txt'
 $pathTwo = 'TestDrive:\somefile.txt'
 ```
 
-To get the full path, you can use this snippet:
+「TestDrive:\」ではじまる PSDrive パスを、リテラルのパスへ変換するコード例:
 
 ```powershell
 function GetFullPath {
@@ -76,6 +77,6 @@ function GetFullPath {
 }
 ```
 
-## Working with .NET Objects
+## .NET オブジェクトの操作
 
-When working directly with .NET objects, it's not possible to use the convenient `TestDrive:\` PSDrive. Instead you need to use the `$TestDrive` variable which holds the actual path in a format that .NET understands. For example instead of using `TestDrive:\somefile.txt` use `$TestDrive\somefile.txt` instead.
+.NETオブジェクトを操作するとき、「TestDrive:\」ではじまる PSDrive パスを使用することはできません。「TestDrive:\」ではじまる PSDrive パスの代わりに、.NET が扱うことができる、通常のパスを保持する `$TestDrive` 変数を使用する必要があります。たとえば、`TestDrive:\somefile.txt` を使用する代わりに、`$TestDrive\somefile.txt` を使用します。
